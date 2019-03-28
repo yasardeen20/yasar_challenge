@@ -1,0 +1,78 @@
+---
+- name: Create a new EC2 instance
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+      region: Your region
+      instance_type: t2.micro
+      ami: Your AMI  
+      keypair:  your key # pem file name
+      Access_key: Enter your access key
+      Secret_key: Enter your access key
+      item: ec2.instances
+      public_id: public_ip_address
+      
+  tasks:
+    - pip:
+        name: boto
+    - name: Create Security group
+      ec2_group:
+        name: "{{ security_group }}"
+        description: The webservers security group
+        region: "{{ region }}"
+        aws_access_key: "{{ Access_key }}"
+        aws_secret_key: "{{ Secret_key }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+    - name: Create an ec2 instance
+      ec2:
+
+         aws_access_key: "{{ Access_key }}"
+         aws_secret_key: "{{ Secret_key }}"
+         key_name: "{{ keypair }}"
+         group: "{{ security_group }}"  # security group name
+         instance_type: "{{ instance_type}}"
+         image: "{{ ami }}"
+         wait: true
+         region: "{{ region }}"
+         count: 1  # default
+         count_tag:
+            Name: Demo
+         instance_tags:
+            Name: Demo
+         vpc_subnet_id: Define Subnet
+         assign_public_ip: yes
+         wait: true
+         wait_timeout: 300
+      register: ec2
+    - name: debug ec2 
+      debug: var=public_ip
+      with_items: ec2.instances
+    - name: Add ec2 in group
+      add_host:
+          dest: "/etc/ansible/hosts"
+          groups: webservers
+          name: "{{item.public_ip }}"
+          with_items: "{{ ec2.instances }}"
+    -name: Install Apache
+      yum: pkg=httpd state=latest
+    - name: Copying the demo file
+      template: src=home/index.html dest=/var/www/html
+
+  
+  handlers:
+    - name: Start ec2
+      service: name=ec2 state=started
+    - name: start apache
+      service: name=httpd state=started
+
+
+
